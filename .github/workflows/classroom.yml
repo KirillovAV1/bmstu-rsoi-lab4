@@ -38,10 +38,10 @@ jobs:
         run: |
           mkdir -p ~/.kube
           echo "${KUBECONFIG_CONTENT}" > ~/.kube/config
-          kubectl config use-context "${K8S_CONTEXT}"
+          kubectl config get-contexts
+          kubectl cluster-info
         env:
           KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG_CONTENT }}
-          K8S_CONTEXT: ${{ secrets.K8S_CONTEXT }}
 
       - name: Deploy reservation
         run: |
