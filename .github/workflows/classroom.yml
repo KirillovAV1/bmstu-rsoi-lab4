@@ -1,4 +1,5 @@
 name: GitHub Classroom Workflow
+
 on:
   push:
     branches:
@@ -6,10 +7,13 @@ on:
   pull_request:
     branches:
       - master
+  workflow_dispatch:
+
 jobs:
   build:
     name: Autograding
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -17,19 +21,46 @@ jobs:
 
       - uses: docker/setup-buildx-action@v2
 
-      # TODO build and run unit tests
-
-      - name: Build images
-        timeout-minutes: 10
+      - name: Build and push Docker images
         run: docker compose build --push
 
-      # TODO deploy to k8s with liveness and readyness probes
+      - name: Deploy reservation
+        run: |
+          helm upgrade --install reservation ./helm/microservice \
+            -f helm/microservice/values-reservation.yaml \
+            --namespace default
 
-      - name: Wait before services are ready
-        run: kubectl wait -n test -l app.kubernetes.io/name=gateway pod --for=condition=Ready --timeout 3m
-      
-      # TODO setup parameters in classroom/autograding.json
-      
+      - name: Deploy loyalty
+        run: |
+          helm upgrade --install loyalty ./helm/microservice \
+            -f helm/microservice/values-loyalty.yaml \
+            --namespace default
+
+      - name: Deploy payment
+        run: |
+          helm upgrade --install payment ./helm/microservice \
+            -f helm/microservice/values-payment.yaml \
+            --namespace default
+
+      - name: Deploy gateway
+        run: |
+          helm upgrade --install gateway ./helm/microservice \
+            -f helm/microservice/values-gateway.yaml \
+            --namespace default
+
+      - name: Deploy gateway-worker
+        run: |
+          helm upgrade --install gateway-worker ./helm/microservice \
+            -f helm/microservice/values-gateway-worker.yaml \
+            --namespace default
+
+      - name: Wait for services to become Ready
+        run: |
+          kubectl wait --namespace default --for=condition=available deploy/reservation-microservice --timeout=180s
+          kubectl wait --namespace default --for=condition=available deploy/loyalty-microservice --timeout=180s
+          kubectl wait --namespace default --for=condition=available deploy/payment-microservice --timeout=180s
+          kubectl wait --namespace default --for=condition=available deploy/gateway-microservice --timeout=180s
+
       - name: Autograding
         uses: education/autograding@v1
         continue-on-error: true
