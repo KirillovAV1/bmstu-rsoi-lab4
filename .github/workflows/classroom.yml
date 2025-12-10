@@ -24,24 +24,39 @@ jobs:
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
         with:
-          version: 'latest'
+          version: latest
 
       - name: Install helm
         uses: azure/setup-helm@v4
         with:
-          version: 'latest'
+          version: latest
 
-      - name: Build and push Docker images
-        run: docker compose build --push
-
-      - name: Configure kubectl
+      - name: Install yc CLI
         run: |
-          mkdir -p ~/.kube
-          echo "${KUBECONFIG_CONTENT}" > ~/.kube/config
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash
+          echo "$HOME/yandex-cloud/bin" >> $GITHUB_PATH
+
+      - name: Configure yc
+        run: |
+          echo "${YC_SA_KEY}" > sa-key.json
+          yc config set cloud-id "${YC_CLOUD_ID}"
+          yc config set folder-id "${YC_FOLDER_ID}"
+          yc config set service-account-key sa-key.json
+        env:
+          YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+          YC_CLOUD_ID: ${{ secrets.YC_CLOUD_ID }}
+          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+
+      - name: Configure kubeconfig
+        run: |
+          yc managed-kubernetes cluster get-credentials "${YC_K8S_CLUSTER_ID}" --external --force
           kubectl config get-contexts
           kubectl cluster-info
         env:
-          KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG_CONTENT }}
+          YC_K8S_CLUSTER_ID: ${{ secrets.YC_K8S_CLUSTER_ID }}
+
+      - name: Build and push Docker images
+        run: docker compose build --push
 
       - name: Deploy reservation
         run: |
